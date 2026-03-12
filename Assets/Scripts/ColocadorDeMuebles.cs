@@ -1,15 +1,15 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.XR.ARSubsystems;
 using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
 using UnityEngine.EventSystems;
-
 
 public class ColocadorDeMuebles : MonoBehaviour
 {
     public GameObject[] listaMuebles;
-
     private GameObject muebleAColocar;
+    private GameObject muebleSeleccionado;
+
     private ARRaycastManager raycastManager;
     private List<ARRaycastHit> hits = new List<ARRaycastHit>();
 
@@ -17,12 +17,9 @@ public class ColocadorDeMuebles : MonoBehaviour
     {
         raycastManager = GetComponent<ARRaycastManager>();
 
-
-        if (listaMuebles.Length > 0) { 
+        if (listaMuebles.Length > 0)
             muebleAColocar = listaMuebles[0];
-        }
     }
-
 
     void Update()
     {
@@ -35,15 +32,46 @@ public class ColocadorDeMuebles : MonoBehaviour
 
             if (toque.phase == TouchPhase.Began)
             {
+                Ray ray = Camera.main.ScreenPointToRay(toque.position);
+                RaycastHit hit3D;
+                bool tocoMueble = false;
+
+                // 1. Lanzamos el láser 3D
+                if (Physics.Raycast(ray, out hit3D))
+                {
+                    // 2. Filtro mágico: Si lo que chocamos NO tiene el componente ARPlane (es decir, no es el piso), entonces es un mueble
+                    if (hit3D.transform.GetComponentInParent<ARPlane>() == null)
+                    {
+                        muebleSeleccionado = hit3D.transform.root.gameObject;
+                        tocoMueble = true; // ¡Agarramos un mueble!
+                    }
+                }
+
+                // 3. Si no tocamos ningún mueble, entonces PONEMOS uno nuevo en el piso
+                if (!tocoMueble)
+                {
+                    if (raycastManager.Raycast(toque.position, hits, TrackableType.PlaneWithinPolygon))
+                    {
+                        Pose hitPose = hits[0].pose;
+                        Instantiate(muebleAColocar, hitPose.position, hitPose.rotation);
+                    }
+                }
+            }
+            else if (toque.phase == TouchPhase.Moved && muebleSeleccionado != null)
+            {
+                // Movemos el mueble por la cuadrícula
                 if (raycastManager.Raycast(toque.position, hits, TrackableType.PlaneWithinPolygon))
                 {
                     Pose hitPose = hits[0].pose;
-                    Instantiate(muebleAColocar, hitPose.position, hitPose.rotation);
+                    muebleSeleccionado.transform.position = hitPose.position;
                 }
-                    
+            }
+            else if (toque.phase == TouchPhase.Ended)
+            {
+                // Soltamos el mueble
+                muebleSeleccionado = null;
             }
         }
-
     }
 
     public void SeleccionarMueble(int indice)
